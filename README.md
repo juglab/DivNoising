@@ -11,17 +11,19 @@ Deep Learning based methods have emerged as the indisputable leaders for virtual
 
 ### Information
 
-This repository hosts the the code for the **[publication](https://arxiv.org/abs/2006.06072)** **DivNoising: Diversity Denoising with Fully Convolutional Variational Autoencoders**. 
+This repository hosts the the code for the **[publication](https://openreview.net/pdf?id=agHLCOBM5jP)** **Fully Unsupervised Diversity Denoising with Convolutional Variational Autoencoders**. 
 
 ### Citation
 If you find our work useful in your research, please consider citing:
 
 ```bibtex
-@article{2020DivNoising,
-  title={DivNoising: Diversity Denoising with Fully Cnvolutional Variational Autoencoders},
-  author={Prakash, Mangal and Alexander Krull and Jug, Florian},
-  journal={arXiv preprint arXiv:2006.06072},
-  year={2020}
+@inproceedings{
+prakash2021fully,
+title={Fully Unsupervised Diversity Denoising with Convolutional Variational Autoencoders},
+author={Mangal Prakash and Alexander Krull and Florian Jug},
+booktitle={International Conference on Learning Representations},
+year={2021},
+url={https://openreview.net/forum?id=agHLCOBM5jP}
 }
 ```
 
