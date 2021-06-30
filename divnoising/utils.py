@@ -1,9 +1,11 @@
 import torch
 import numpy as np
+import os
 import time
 from sklearn.feature_extraction import image
 from tqdm import tqdm
 from glob import glob
+from tifffile import imsave
 from sklearn.cluster import MeanShift
 from matplotlib import pyplot as plt
 from IPython.display import clear_output
@@ -71,6 +73,26 @@ def convertNumpyToTensor(numpy_array):
     """
     return torch.from_numpy(numpy_array)
 
+def preprocess(train_patches,val_patches):
+    data_mean, data_std = getMeanStdData(train_patches, val_patches)
+    x_train, x_val = convertToFloat32(train_patches,val_patches)
+    x_train_extra_axis = x_train[:,np.newaxis]
+    x_val_extra_axis = x_val[:,np.newaxis]
+    x_train_tensor = convertNumpyToTensor(x_train_extra_axis)
+    x_val_tensor = convertNumpyToTensor(x_val_extra_axis)
+    return x_train_tensor, x_val_tensor, data_mean, data_std
+
+def get_trainval_patches(x,split_fraction=0.85,augment=True,patch_size=128,num_patches=None):
+    np.random.shuffle(x)
+    train_images = x[:int(0.85*x.shape[0])]
+    val_images = x[int(0.85*x.shape[0]):]
+    if(augment):
+        train_images = augment_data(train_images)
+    x_train_crops = extract_patches(train_images, patch_size, num_patches)
+    x_val_crops = extract_patches(val_images, patch_size, num_patches)
+    print("Shape of training patches:", x_train_crops.shape, "Shape of validation patches:", x_val_crops.shape)
+    return x_train_crops, x_val_crops
+
 def extract_patches(x,patch_size,num_patches):
     """Deterministically extract patches from array of images. 
     Parameters
@@ -82,6 +104,10 @@ def extract_patches(x,patch_size,num_patches):
     num_patches: int
         Number of patches to be extracted from each image.    
     """
+    img_width = x.shape[2]
+    img_height = x.shape[1]
+    if(num_patches is None):
+        num_patches = int(float(img_width*img_height)/float(patch_size**2)*2)
     patches = np.zeros(shape=(x.shape[0]*num_patches,patch_size,patch_size))
     
     for i in tqdm(range(x.shape[0])):
@@ -97,13 +123,10 @@ def augment_data(X_train):
         Array of training images.
     """
     X_ = X_train.copy()
-
     X_train_aug = np.concatenate((X_train, np.rot90(X_, 1, (1, 2))))
     X_train_aug = np.concatenate((X_train_aug, np.rot90(X_, 2, (1, 2))))
     X_train_aug = np.concatenate((X_train_aug, np.rot90(X_, 3, (1, 2))))
     X_train_aug = np.concatenate((X_train_aug, np.flip(X_train_aug, axis=1)))
-
-    print('Raw image size after augmentation', X_train_aug.shape)
     return X_train_aug
 
 def loadImages(path):
@@ -302,7 +325,7 @@ def plotProbabilityDistribution(signalBinIndex, histogram, gaussianMixtureNoiseM
     plt.title("Probability Distribution P(x|s) at signal =" + str(querySignal_numpy))
     plt.legend()
     
-def predictMMSE(vae, img, samples, returnSamples=False, tq=True): 
+def predict_mmse(vae, img, samples, device, returnSamples=False, tq=True): 
     '''
     Predicts MMSE estimate.
     Parameters
@@ -315,33 +338,28 @@ def predictMMSE(vae, img, samples, returnSamples=False, tq=True):
         Number of samples to average for computing MMSE estimate.
     returnSamples: 
         Should the method also return the individual samples?
-    tq: boolean
-        If tqdm should be active or not to indicate progress.
+    tq: 
+        Should progress bar be shown.
+    tta: 
+        Should test time augmentation be enabled.
     '''
     img_height,img_width=img.shape[0],img.shape[1]
-    img_t = torch.Tensor(img)
-    image_sample = img_t.view(1,1,img.shape[0], img.shape[1]).cuda()
-    mu, logvar = vae.encode(image_sample)
-    akku=np.zeros((img_height,img_width))
-    
+    imgT=torch.Tensor(img.copy())
+    image_sample = imgT.view(1,1,img_height,img_width).to(device)
+    vae.num_samples = samples
+    all_samples = np.array(vae(image_sample,tqdm_bar=tq))
+    samples_array = all_samples[:,0,0,:,:]
     if returnSamples:
-        retSamp=[]
-    for i in tqdm(range(samples), disable= not tq):
-        z = vae.reparameterize(mu, logvar)
-        #z=mu
-        recon = vae.decode(z)
-        recon_cpu = recon.cpu()
-        recon_numpy = recon_cpu.detach().numpy()
-        recon_numpy.shape=(img_height,img_width) 
-        akku+=recon_numpy
-        if returnSamples:
-            retSamp.append(recon_numpy)
-        
-    akku=akku/float(samples)
-    if returnSamples:
-        return akku, np.array(retSamp)
+        return np.mean(samples_array,axis=0), samples_array
     else:
-        return akku
+        return np.mean(samples_array,axis=0)
+    
+def normalize_minmse(x, target):
+    """Affine rescaling of x, such that the mean squared error to target is minimal."""
+    cov = np.cov(x.flatten(), target.flatten())
+    alpha = cov[0, 1] / (cov[0, 0] + 1e-10)
+    beta = target.mean() - alpha * x.mean()
+    return alpha * x + beta
 
 def PSNR(gt, img):
     '''
@@ -355,3 +373,146 @@ def PSNR(gt, img):
     '''
     mse = np.mean(np.square(gt - img))
     return 20 * np.log10(np.max(gt)-np.min(gt)) - 10 * np.log10(mse)
+
+def tta_forward(x):
+    """
+    Augments x 8-fold: all 90 deg rotations plus lr flip of the four rotated versions.
+
+    Parameters
+    ----------
+    x: data to augment
+
+    Returns
+    -------
+    Stack of augmented x.
+    """
+    x_aug = [x, np.rot90(x, 1), np.rot90(x, 2), np.rot90(x, 3)]
+    x_aug_flip = x_aug.copy()
+    for x_ in x_aug:
+        x_aug_flip.append(np.fliplr(x_))
+    return x_aug_flip
+
+def tta_backward(x_aug):
+    """
+    Inverts `tta_forward` and averages the 8 images.
+
+    Parameters
+    ----------
+    x_aug: stack of 8-fold augmented images.
+
+    Returns
+    -------
+    average of de-augmented x_aug.
+    """
+    x_deaug = [x_aug[0], 
+               np.rot90(x_aug[1], -1), 
+               np.rot90(x_aug[2], -2), 
+               np.rot90(x_aug[3], -3),
+               np.fliplr(x_aug[4]), 
+               np.rot90(np.fliplr(x_aug[5]), -1), 
+               np.rot90(np.fliplr(x_aug[6]), -2), 
+               np.rot90(np.fliplr(x_aug[7]), -3)]
+    return np.mean(x_deaug, 0)
+
+def predict_and_save(img,vae,num_samples,device,
+                     fraction_samples_to_export,export_mmse,export_results_path,tta):
+    
+    '''
+    Predict denoised images and save results to disk.
+    Parameters
+    ----------
+    img: array or list
+        A stack of tif images.
+    vae: DivNoising model
+    num_samples: int
+        Number of samples to generate and use for computing MMSE.
+    device: cuda device or cpu
+    fraction_samples_to_export: float between 0 (inclusive) and 1 (inclusive)
+        Number of samples to save on disk for each noisy image.
+    export_mmse: bool
+        Should MMSE estimate also be exported?
+    export_results_path: str
+        path where all results will be exported.
+    tta: bool
+        Use test-time augmentation if set to True.
+    
+    '''
+    mmse_results = []
+    if isinstance(img,(list)):
+        num_images = len(img)
+    if isinstance(img,(np.ndarray)):
+        num_images = img.shape[0]
+    for i in range(num_images):
+        print("Processing image:", i)
+        if tta:
+            aug_imgs = tta_forward(img[i])
+            mmse_aug=[]
+            for j in range(len(aug_imgs)):
+                if(j==0):
+                    mmse,samples = predict_mmse(vae, aug_imgs[j], num_samples, device=device, returnSamples=True)
+                else:
+                    mmse = predict_mmse(vae, aug_imgs[j], num_samples, device=device, returnSamples=False)
+                mmse_aug.append(mmse)
+
+            mmse_back_transformed = tta_backward(mmse_aug)
+            mmse_results.append(mmse_back_transformed)
+        else:
+            mmse,samples = predict_mmse(vae, img[i], num_samples, device=device, returnSamples=True)
+            mmse_results.append(mmse)
+        if fraction_samples_to_export>0:
+            subdir = export_results_path+"/"+str(i).zfill(3)+"/"
+            if not os.path.exists(subdir):
+                os.makedirs(subdir)
+            imsave(subdir+"samples_for_image_"+str(i).zfill(3)+".tif",
+                   np.array(samples[:int(num_samples*fraction_samples_to_export)]).astype("float32"))
+    if (export_mmse):    
+        imsave(export_results_path+"/mmse_results.tif", np.array(mmse_results).astype("float32"))
+    return mmse_results
+
+def plot_qualitative_results(noisy_input,vae,device):
+    '''
+    Plot qualitative results on patches.
+    Parameters
+    ----------
+    noisy_input: array or list
+        A stack of tif images.
+    '''
+    
+    for j in range(5):  
+    
+        # we select a random crop
+        size_uncropped=int(0.14*(np.minimum(noisy_input[0].shape[0],noisy_input[0].shape[1])))
+        size = size_uncropped-(size_uncropped%(2**vae.n_depth))
+        minx=np.random.randint(0,noisy_input[0].shape[0]-size)
+        miny=np.random.randint(0,noisy_input[0].shape[1]-size)
+        img=noisy_input[0][minx:minx+size,miny:miny+size]
+
+
+        # generate samples and MMSE estimate
+        imgMMSE, samps = predict_mmse(vae, img, samples=100, device=device, returnSamples=True)
+
+        plt.figure(figsize=(20, 6.75))
+
+        # We display the noisy input image
+        ax=plt.subplot(1,6,1)
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+        plt.imshow(img,cmap='magma')
+        plt.title('input')
+
+        # We display the average of 100 predicted samples
+        ax=plt.subplot(1,6,6)
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+        plt.imshow(imgMMSE,cmap='magma')
+        plt.title('MMSE (100 samples)')
+
+        #We also display the first 4 samples
+        for i in range(4):     
+            ax=plt.subplot(1,6,i+2)
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+            plt.imshow(samps[i],cmap='magma')
+            plt.title('prediction '+str(i+1))
+
+        plt.show()

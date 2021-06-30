@@ -11,7 +11,7 @@ from torch.autograd import Variable
 from collections import OrderedDict
 from torch.nn import init
 import numpy as np
-import torchvision
+# import torchvision
 
 #from unet.model import UNet
 #import pn2v.utils
