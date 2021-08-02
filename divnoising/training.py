@@ -44,7 +44,7 @@ def create_model_and_train(basedir,data_mean,data_std,gaussian_noise_std,
                              [EarlyStopping(monitor='val_loss', min_delta=1e-6, 
                               patience = 100, verbose = True, mode='min'),checkpoint_callback], weights_summary=weights_summary)
     trainer.fit(vae, train_loader, val_loader)
-    collapse_flag = trainer.should_stop
+    collapse_flag = vae.collapse
     return collapse_flag
 
 def train_network(x_train_tensor, x_val_tensor, batch_size, data_mean, data_std, gaussian_noise_std, 
