@@ -188,6 +188,7 @@ class VAELightning(pl.LightningModule):
         self.groups = groups
         self.num_samples=num_samples
         self.kl_min=kl_min
+        self.collapse = False
         
         self.encoder = Encoder(z_dim=self.z_dim, in_channels = self.in_channels, init_filters = self.init_filters, n_filters_per_depth=self.n_filters_per_depth, n_depth=self.n_depth, kernel_size=self.kernel_size, stride=self.stride, padding=self.padding, bias=self.bias, groups=self.groups)
                
@@ -267,6 +268,7 @@ class VAELightning(pl.LightningModule):
         if kl_loss < self.kl_min:
             print('postersior collapse: aborting')
             self.trainer.should_stop=True
+            self.collapse=True
             
         self.log('reconstruction_loss', reconstruction_loss, on_epoch=True)
         self.log('kl_loss', kl_weight*kl_loss, on_epoch=True)
