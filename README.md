@@ -36,7 +36,7 @@ Follow the steps below to setup DivNoising. <br>
 (iii) Create a new conda environment by the command `conda env create -f DivNoising.yml`. <br>
 (iv) Activate the conda environemnt `conda activate DivNoising`. <br>
 (v) Install tensorboard with the command `conda install -c conda-forge tensorboard`. <br>
-(vi) Install jupyter with the command `pip install jupyter`. <br>
+(vi) Install jupyter with the command `pip install -U jupyter protobuf`. <br>
 (vii) Finally, execute the command `pip install ipykernel` followed by the command `python -m ipykernel install --user --name DivNoising --display-name 'DivNoising'`. <br>
 
 You are all set to run DivNoising now.
