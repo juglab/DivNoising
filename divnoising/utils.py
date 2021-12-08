@@ -84,12 +84,12 @@ def preprocess(train_patches,val_patches):
 
 def get_trainval_patches(x,split_fraction=0.85,augment=True,patch_size=128,num_patches=None):
     np.random.shuffle(x)
-    train_images = x[:int(0.85*x.shape[0])]
-    val_images = x[int(0.85*x.shape[0]):]
-    if(augment):
-        train_images = augment_data(train_images)
+    train_images = x[:int(split_fraction*x.shape[0])]
+    val_images = x[int(split_fraction*x.shape[0]):]
     x_train_crops = extract_patches(train_images, patch_size, num_patches)
     x_val_crops = extract_patches(val_images, patch_size, num_patches)
+    if(augment):
+        x_train_crops = augment_data(x_train_crops)
     print("Shape of training patches:", x_train_crops.shape, "Shape of validation patches:", x_val_crops.shape)
     return x_train_crops, x_val_crops
 
