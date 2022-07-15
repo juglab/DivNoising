@@ -111,7 +111,7 @@ def extract_patches(x,patch_size,num_patches):
     patches = np.zeros(shape=(x.shape[0]*num_patches,patch_size,patch_size))
     
     for i in tqdm(range(x.shape[0])):
-        patches[i*num_patches:(i+1)*num_patches] = image.extract_patches_2d(x[i],(patch_size,patch_size), num_patches,
+        patches[i*num_patches:(i+1)*num_patches] = image.extract_patches_2d(x[i],(patch_size,patch_size), max_patches=num_patches,
                                                                            random_state=i)    
     return patches
 
