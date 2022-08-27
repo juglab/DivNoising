@@ -27,8 +27,27 @@ url={https://openreview.net/forum?id=agHLCOBM5jP}
 }
 ```
 
-### Dependencies and Setup
-We have tested this implementation using pytorch version 1.1.0 and cudatoolkit version 9.0. <br>
+### One simple way to install DivNoising
+_Note:_ if you do not mind pip, use the next, truly simple way of installing DivNoising.
+```
+conda create -n divnoising python=3.7
+conda activate divnoising
+conda install pytorch torchvision torchaudio cudatoolkit=11.6 -c pytorch -c conda-forge
+conda install pytorch-lightning==1.2.10 -c conda-forge
+conda install nb_conda tifffile matplotlib scipy scikit-learn
+```
+<!-- -->
+
+### A truly simple, pip-based way to install DivNoising
+```
+conda create -n divnoising python=3.7
+conda activate divnoising
+conda install nb_conda tifffile matplotlib scipy scikit-learn
+pip install pytorch-lightning==1.2.10
+```
+
+### And another way that seems much less clean, but we fear to remove it (quite yet)...
+We have tested this implementation using pytorch version 1.1.0 and cudatoolkit version 9.0. (Obviously we also tested it, by now, with cudatoolkit=11.6, as you can see above.)<br>
 
 Follow the steps below to setup DivNoising. <br>
 (i) Move to the command prompt and enter `git clone https://github.com/juglab/DivNoising/`. <br>
