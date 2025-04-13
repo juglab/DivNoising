@@ -5,7 +5,7 @@ import time
 from sklearn.feature_extraction import image
 from tqdm import tqdm
 from glob import glob
-from tifffile import imsave
+from tifffile import imwrite
 from sklearn.cluster import MeanShift
 from matplotlib import pyplot as plt
 from IPython.display import clear_output
@@ -463,10 +463,10 @@ def predict_and_save(img,vae,num_samples,device,
             subdir = export_results_path+"/"+str(i).zfill(3)+"/"
             if not os.path.exists(subdir):
                 os.makedirs(subdir)
-            imsave(subdir+"samples_for_image_"+str(i).zfill(3)+".tif",
+            imwrite(subdir+"samples_for_image_"+str(i).zfill(3)+".tif",
                    np.array(samples[:int(num_samples*fraction_samples_to_export)]).astype("float32"))
     if (export_mmse):    
-        imsave(export_results_path+"/mmse_results.tif", np.array(mmse_results).astype("float32"))
+        imwrite(export_results_path+"/mmse_results.tif", np.array(mmse_results).astype("float32"))
     return mmse_results
 
 def plot_qualitative_results(noisy_input,vae,device):
