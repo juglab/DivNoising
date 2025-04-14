@@ -82,7 +82,7 @@ class GaussianMixtureNoiseModel:
             self.max_signal=torch.Tensor(params['max_signal']).to(self.device)
             
             self.weight=torch.Tensor(params['trained_weight']).to(self.device)
-            self.min_sigma=np.asscalar(params['min_sigma'])
+            self.min_sigma=np.float(params['min_sigma'])
             self.n_gaussian=self.weight.shape[0]//3
             self.n_coeff=self.weight.shape[1]
             self.tol=torch.Tensor([1e-10]).to(self.device)
